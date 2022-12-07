@@ -145,12 +145,17 @@ mod tests {
     use crate::halo2;
     use crate::integer;
     use crate::maingate;
+    use ecc::halo2::halo2curves::secp256k1::Fq;
     // use ecc::halo2::halo2curves::secp256k1::Fp;
     use ecc::halo2::halo2curves::secp256k1::Secp256k1;
     use ecc::halo2::halo2curves::secp256k1::Secp256k1Affine;
+    use ecc::halo2::plonk::Advice;
+    use ecc::halo2::plonk::Column;
+    use ecc::halo2::plonk::Instance;
     // use ecc::halo2::halo2curves::secp256k1::Secp256k1Compressed;
     // use ecc::halo2::plonk::Column;
     // use ecc::halo2::plonk::Instance;
+    use ecc::integer::rns::Common;
     use ecc::integer::Range;
     use ecc::maingate::big_to_fe;
     use ecc::maingate::fe_to_big;
@@ -175,6 +180,7 @@ mod tests {
     struct TestCircuitEcdsaVerifyConfig {
         main_gate_config: MainGateConfig,
         range_config: RangeConfig,
+        pk_column: Column<Advice>,
         // instance: Column<Instance>,
     }
 
@@ -195,11 +201,14 @@ mod tests {
                 overflow_bit_lens,
             );
 
+            let pk_column = meta.advice_column();
+
             // let instance = meta.instance_column();
 
             TestCircuitEcdsaVerifyConfig {
                 main_gate_config,
                 range_config,
+                pk_column,
                 // instance,
             }
         }
@@ -247,9 +256,57 @@ mod tests {
             config: Self::Config,
             mut layouter: impl Layouter<N>,
         ) -> Result<(), Error> {
+            println!("self.public_key: {:?}\n", self.public_key);
+
             let mut ecc_chip = GeneralEccChip::<E, N, NUMBER_OF_LIMBS, BIT_LEN_LIMB>::new(
                 config.ecc_chip_config(),
             );
+
+            let pk = layouter.assign_region(
+                || "assign public key",
+                |mut region| {
+                    // let pk = self.public_key.map(|pk| {
+                    //     let p = pk.coordinates().unwrap().x().clone();
+                    //     // // let input = Fq::from_bytes(&p.to_bytes()).unwrap();
+                    //     self.public_key
+                    // });
+                    //
+                    //
+
+                    let pk = self.public_key.map(|p| {
+                        // let a = p.coordinates().unwrap();
+                        let a = ecc_chip.to_rns_point(p);
+                        // let b = a.x();
+                        // println!("222 bb: {:?}", b);
+
+                        // let a: N = a.x();
+                        // let a = a.get_lower_128();
+
+                        // N::from_u128(a)
+                        // .into() as N;
+                        // N::from(a.into())
+                        // n
+                    });
+                    println!("1111111 pk: {:?}\n", pk);
+                    // let a = N::from(self.public_key);
+
+                    // let cell = region.assign_advice(|| "private input", config.pk_column, 0, || pk);
+
+                    // println!("load_private(): region: {:?}, cell: {:?}\n", region, cell);
+
+                    // cell.map(|x| Number(x))
+                    Ok(())
+                },
+                // |region| {
+                //     let offset = 0;
+                //     let ctx = &mut RegionCtx::new(region, offset);
+
+                //     ecc_chip.assign_aux_generator(ctx, Value::known(self.aux_generator))?;
+                //     ecc_chip.assign_aux(ctx, self.window_size, 1)?;
+
+                //     Ok(())
+                // },
+            )?;
 
             layouter.assign_region(
                 || "assign aux values",
@@ -301,7 +358,13 @@ mod tests {
                 },
             )?;
 
+            let pk_x = pk1.point.x().native();
+
             println!("pk1: {:?}\n", pk1.point);
+
+            println!("pk_x: {:?}\n", pk_x);
+
+            // println!("instance: {:?}\n", config.instance);
 
             // let a = pk1.point.x().native().cell();
 
@@ -319,6 +382,18 @@ mod tests {
         fn mod_n<C: CurveAffine>(x: C::Base) -> C::Scalar {
             let x_big = fe_to_big(x);
             big_to_fe(x_big)
+        }
+
+        use ecc::halo2::halo2curves::secp256k1::Fp;
+        use ecc::halo2::halo2curves::secp256k1::Fq;
+        use ecc::halo2::halo2curves::{CurveAffine, FieldExt};
+        use group::ff::PrimeField;
+        fn mod_n2(x: Fp) -> Fq {
+            let mut x_repr = [0u8; 32];
+            x_repr.copy_from_slice(x.to_repr().as_ref());
+            let mut x_bytes = [0u8; 64];
+            x_bytes[..32].copy_from_slice(&x_repr[..]);
+            Fq::from_bytes_wide(&x_bytes)
         }
 
         fn run<C: CurveAffine, N: FieldExt>(sk: C) {
@@ -391,89 +466,67 @@ mod tests {
         }
 
         fn run2() {
-            // use crate::curves::bn256::Fr as BnScalar;
-            // use crate::curves::pasta::{Fp as PastaFp, Fq as PastaFq};
-            // use crate::curves::secp256k1::Secp256k1Affine as Secp256k1;
-            use ecc::halo2::halo2curves::secp256k1::Fp;
-            use ecc::halo2::halo2curves::secp256k1::Fq;
-            use ecc::halo2::halo2curves::{CurveAffine, FieldExt};
-
             let g = Secp256k1::generator();
-            // let sk = Secp256k1Affine::random(OsRng);
             let sk = Fq::random(OsRng);
-
-            let b = g * sk;
-            // g::random();
-            // as CurveAffine;
-            // let sk = (Secp256k1 as CurveAffine)::ScalarExt::random(OsRng);
-            // let sk = Fp::random(OsRng);
-
-            // Generate a key pair
-            // let sk = <C as CurveAffine>::ScalarExt::random(OsRng);
-            // let public_key = (g * sk).to_affine();
-
-            // println!("public_key: {:?}\n", public_key);
-
-            // let b1 = public_key.coordinates().unwrap();
-
-            // let b2 = b1.x();
-
-            // // let bb: N = bb.x().into();
-            // //
-            // //
-            // //
-            // // Fp::from_raw(bb.x());
-            // //
-            // // b2.to_repr();
-
-            // // println!("b2: {:?}\n", b2.to_bytes());
+            let pk = (g * sk).to_affine();
 
             // Generate a valid signature
             // Suppose `m_hash` is the message hash
-            // let msg_hash = <C as CurveAffine>::ScalarExt::random(OsRng);
-            let msg_hash = Secp256k1Affine::random(OsRng);
+            let msg_hash = Fq::random(OsRng);
 
-            // Draw arandomness
-            // let k = <C as CurveAffine>::ScalarExt::random(OsRng);
-            let k = Secp256k1Affine::random(OsRng);
-            let k_inv = k.invert().unwrap();
+            let (r, s) = {
+                // Draw arandomness
+                let k = Fq::random(OsRng);
+                let k_inv = k.invert().unwrap();
 
-            // Calculate `r`
-            let r_point = (g * k).to_affine().coordinates().unwrap();
-            let x = r_point.x();
-            let r = mod_n::<C>(*x);
+                // Calculate `r`
+                let r_point = (g * k).to_affine().coordinates().unwrap();
+                let x = r_point.x();
+                let r: Fq = mod_n2(*x);
 
-            // Calculate `s`
-            let s = k_inv * (msg_hash + (r * sk));
+                // Calculate `s`
+                let s: Fq = k_inv * (msg_hash + (r * sk));
 
-            println!("r: {:?}, s: {:?}\n", r, s);
+                (r, s)
+            };
 
-            // Sanity check. Ensure we construct a valid signature. So lets verify it
             {
+                // Verify
                 let s_inv = s.invert().unwrap();
                 let u_1 = msg_hash * s_inv;
-                let u_2 = r * s_inv;
-                let r_point = ((g * u_1) + (public_key * u_2))
-                    .to_affine()
-                    .coordinates()
-                    .unwrap();
+                let u_2: Fq = r * s_inv;
+
+                let v_1 = g * u_1;
+                let v_2 = pk * u_2;
+
+                let r_point = (v_1 + v_2).to_affine().coordinates().unwrap();
                 let x_candidate = r_point.x();
-                let r_candidate = mod_n::<C>(*x_candidate);
+                let r_candidate = mod_n2(*x_candidate);
+
                 assert_eq!(r, r_candidate);
             }
 
-            // let aux_generator = C::CurveExt::random(OsRng).to_affine();
-            // let circuit = TestCircuitEcdsaVerify::<C, N> {
-            //     public_key: Value::known(public_key),
-            //     signature: Value::known((r, s)),
-            //     msg_hash: Value::known(msg_hash),
-            //     aux_generator,
-            //     window_size: 2,
-            //     ..Default::default()
-            // };
+            let aux_generator = Secp256k1::random(OsRng).to_affine();
 
-            // let instance = vec![vec![]];
-            // assert_eq!(mock_prover_verify(&circuit, instance), Ok(()));
+            let circuit = TestCircuitEcdsaVerify::<Secp256k1Affine, Fq> {
+                public_key: Value::known(pk),
+                signature: Value::known((r, s)),
+                msg_hash: Value::known(msg_hash),
+                aux_generator,
+                window_size: 2,
+                ..Default::default()
+            };
+
+            let input = pk.coordinates().unwrap().x().clone();
+            let input = Fq::from_bytes(&input.to_bytes()).unwrap();
+
+            let instance = vec![vec![input]];
+
+            println!("pk: {:?}, msg_hash: {:?}\n", pk, msg_hash);
+            println!("r: {:?}, s: {:?}\n", r, s);
+            println!("input: {:?}\n", input);
+
+            assert_eq!(mock_prover_verify(&circuit, instance), Ok(()));
         }
 
         // use crate::curves::bn256::Fr as BnScalar;
@@ -485,6 +538,7 @@ mod tests {
         // let sk = Secp256k1::random(OsRng);
         // let a = g * sk;
         // run::<Secp256k1, ecc::halo2::halo2curves::secp256k1::Fp>(sk);
+        println!("111");
         run2();
         // run::<Secp256k1, PastaFp>();
         // run::<Secp256k1, PastaFq>();

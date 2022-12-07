@@ -707,7 +707,10 @@ mod tests {
                 b: Value::known(b),
                 ..Default::default()
             };
+            println!("instance: {:?}\n", public_data.len());
+
             let instance = vec![public_data];
+
             assert_eq!(mock_prover_verify(&circuit, instance), Ok(()));
         }
 
