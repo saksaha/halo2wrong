@@ -170,6 +170,8 @@ impl<
         point: AssignedPoint<Emulated::Base, N, NUMBER_OF_LIMBS, BIT_LEN_LIMB>,
         offset: usize,
     ) -> Result<(), Error> {
+        println!("1111111111111111111");
+
         use integer::maingate::MainGateInstructions;
         let main_gate = self.main_gate();
 

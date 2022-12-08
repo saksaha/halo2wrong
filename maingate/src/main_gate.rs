@@ -139,6 +139,8 @@ impl<F: FieldExt> MainGateInstructions<F, WIDTH> for MainGate<F> {
         value: AssignedValue<F>,
         row: usize,
     ) -> Result<(), Error> {
+        println!("55 maingate::expore_public(): value: {:?}\n", value);
+
         let config = self.config();
         layouter.constrain_instance(value.cell(), config.instance, row)
     }

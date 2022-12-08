@@ -8,6 +8,11 @@ use ecc::maingate::RegionCtx;
 use ecc::{AssignedPoint, EccConfig, GeneralEccChip};
 use halo2::arithmetic::{CurveAffine, FieldExt};
 use halo2::{circuit::Value, plonk::Error};
+use halo2_gadgets;
+use halo2_gadgets::sinsemilla::merkle::chip::MerkleConfig;
+use halo2_gadgets::sinsemilla::primitives::CommitDomain;
+use halo2_gadgets::sinsemilla::HashDomains;
+use halo2_proofs::pasta::pallas;
 use integer::rns::Integer;
 use integer::{AssignedInteger, IntegerInstructions};
 use maingate::{MainGateConfig, RangeConfig};
@@ -139,8 +144,194 @@ impl<E: CurveAffine, N: FieldExt, const NUMBER_OF_LIMBS: usize, const BIT_LEN_LI
     }
 }
 
+const MERKLE_DEPTH: usize = 32;
+use group::{ff::Field, Curve};
+use lazy_static::lazy_static;
+// use pasta_curves::pallas;
+use std::convert::TryInto;
+
+pub(crate) const PERSONALIZATION: &str = "MerkleCRH";
+// lazy_static::lazy_static! {
+// static ref COMMIT_DOMAIN: CommitDomain = CommitDomain::new(PERSONALIZATION);
+//     COMMIT_DOMAIN.
+// static ref Q: pallas::Affine = COMMIT_DOMAIN.Q().to_affine();
+// // static ref R: pallas::Affine = COMMIT_DOMAIN.R().to_affine();
+// // static ref R_ZS_AND_US: Vec<(u64, [pallas::Base; H])> =
+// //     find_zs_and_us(*R, NUM_WINDOWS).unwrap();
+// }
+
+// #[derive(Debug, Clone, Eq, PartialEq)]
+// pub(crate) struct TestHashDomain;
+// impl HashDomains<pallas::Affine> for TestHashDomain {
+//     fn Q(&self) -> pallas::Affine {
+//         // let cd = CommitDomain::new(PERSONALIZATION);
+//         // cd.Q();
+
+//         *Q
+//     }
+// }
+
+// struct SinsemillaConfig(
+//     MerkleConfig<TestHashDomain, TestCommitDomain, TestFixedBases>,
+//     MerkleConfig<TestHashDomain, TestCommitDomain, TestFixedBases>,
+// )
+
+// impl Circuit<pallas::Base> for SincemillaCircuit {
+//     type Config = (
+//         MerkleConfig<TestHashDomain, TestCommitDomain, TestFixedBases>,
+//         MerkleConfig<TestHashDomain, TestCommitDomain, TestFixedBases>,
+//     );
+//     type FloorPlanner = SimpleFloorPlanner;
+
+//     fn without_witnesses(&self) -> Self {
+//         Self::default()
+//     }
+
+//     fn configure(meta: &mut ConstraintSystem<pallas::Base>) -> Self::Config {
+//         let advices = [
+//             meta.advice_column(),
+//             meta.advice_column(),
+//             meta.advice_column(),
+//             meta.advice_column(),
+//             meta.advice_column(),
+//             meta.advice_column(),
+//             meta.advice_column(),
+//             meta.advice_column(),
+//             meta.advice_column(),
+//             meta.advice_column(),
+//         ];
+
+//         //   !                              <                       >      <>
+//         // 0xb2bd6a00feb3f528ef1f8556699a26a52d1a1fddbec80f87f36bcfed27eb02b0
+//         // 0x32bd6a00feb3f528ef1f8556699a26a4e88cede5ac2e1d50c1116e1327eb02ae
+//         // 0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001
+
+//         // Shared fixed column for loading constants
+//         let constants = meta.fixed_column();
+//         meta.enable_constant(constants);
+
+//         // NB: In the actual Action circuit, these fixed columns will be reused
+//         // by other chips. For this test, we are creating new fixed columns.
+//         let fixed_y_q_1 = meta.fixed_column();
+//         let fixed_y_q_2 = meta.fixed_column();
+
+//         // Fixed columns for the Sinsemilla generator lookup table
+//         let lookup = (
+//             meta.lookup_table_column(),
+//             meta.lookup_table_column(),
+//             meta.lookup_table_column(),
+//         );
+
+//         let range_check = LookupRangeCheckConfig::configure(meta, advices[9], lookup.0);
+
+//         let sinsemilla_config_1 = SinsemillaChip::configure(
+//             meta,
+//             advices[5..].try_into().unwrap(),
+//             advices[7],
+//             fixed_y_q_1,
+//             lookup,
+//             range_check,
+//         );
+//         let config1 = MerkleChip::configure(meta, sinsemilla_config_1);
+
+//         let sinsemilla_config_2 = SinsemillaChip::configure(
+//             meta,
+//             advices[..5].try_into().unwrap(),
+//             advices[2],
+//             fixed_y_q_2,
+//             lookup,
+//             range_check,
+//         );
+//         let config2 = MerkleChip::configure(meta, sinsemilla_config_2);
+
+//         (config1, config2)
+//     }
+
+//     fn synthesize(
+//         &self,
+//         config: Self::Config,
+//         mut layouter: impl Layouter<pallas::Base>,
+//     ) -> Result<(), Error> {
+//         // Load generator table (shared across both configs)
+//         SinsemillaChip::<TestHashDomain, TestCommitDomain, TestFixedBases>::load(
+//             config.0.sinsemilla_config.clone(),
+//             &mut layouter,
+//         )?;
+
+//         // Construct Merkle chips which will be placed side-by-side in the circuit.
+//         let chip_1 = MerkleChip::construct(config.0.clone());
+//         let chip_2 = MerkleChip::construct(config.1.clone());
+
+//         let leaf = chip_1.load_private(
+//             layouter.namespace(|| ""),
+//             config.0.cond_swap_config.a(),
+//             self.leaf,
+//         )?;
+
+//         let path = MerklePath {
+//             chips: [chip_1, chip_2],
+//             domain: TestHashDomain,
+//             leaf_pos: self.leaf_pos,
+//             path: self.merkle_path,
+//         };
+
+//         let computed_final_root =
+//             path.calculate_root(layouter.namespace(|| "calculate root"), leaf)?;
+
+//         self.leaf
+//             .zip(self.leaf_pos)
+//             .zip(self.merkle_path)
+//             .zip(computed_final_root.value())
+//             .assert_if_known(|(((leaf, leaf_pos), merkle_path), computed_final_root)| {
+//                 // The expected final root
+//                 let final_root =
+//                     merkle_path
+//                         .iter()
+//                         .enumerate()
+//                         .fold(*leaf, |node, (l, sibling)| {
+//                             let l = l as u8;
+//                             let (left, right) = if leaf_pos & (1 << l) == 0 {
+//                                 (&node, sibling)
+//                             } else {
+//                                 (sibling, &node)
+//                             };
+
+//                             use crate::sinsemilla::primitives as sinsemilla;
+//                             let merkle_crh =
+//                                 sinsemilla::HashDomain::from_Q(TestHashDomain.Q().into());
+
+//                             merkle_crh
+//                                 .hash(
+//                                     iter::empty()
+//                                         .chain(i2lebsp::<10>(l as u64).iter().copied())
+//                                         .chain(
+//                                             left.to_le_bits()
+//                                                 .iter()
+//                                                 .by_vals()
+//                                                 .take(pallas::Base::NUM_BITS as usize),
+//                                         )
+//                                         .chain(
+//                                             right
+//                                                 .to_le_bits()
+//                                                 .iter()
+//                                                 .by_vals()
+//                                                 .take(pallas::Base::NUM_BITS as usize),
+//                                         ),
+//                                 )
+//                                 .unwrap_or(pallas::Base::zero())
+//                         });
+
+//                 // Check the computed final root against the expected final root.
+//                 computed_final_root == &&final_root
+//             });
+
+//         Ok(())
+//     }
+// }
+
 #[cfg(test)]
 mod tests {
+    // use halo2_gadgets::sinsemilla::chip
     use super::{AssignedEcdsaSig, AssignedPublicKey, EcdsaChip};
     use crate::halo2;
     use crate::integer;
@@ -155,6 +346,7 @@ mod tests {
     // use ecc::halo2::halo2curves::secp256k1::Secp256k1Compressed;
     // use ecc::halo2::plonk::Column;
     // use ecc::halo2::plonk::Instance;
+    use super::*;
     use ecc::integer::rns::Common;
     use ecc::integer::Range;
     use ecc::maingate::big_to_fe;
@@ -181,14 +373,26 @@ mod tests {
         main_gate_config: MainGateConfig,
         range_config: RangeConfig,
         pk_column: Column<Advice>,
-        // instance: Column<Instance>,
+        instance: Column<Instance>,
+        // sinsemilla
+        // leaf: Value<pallas::Base>,
+        // leaf_pos: Value<u32>,
+        // merkle_path: Value<[pallas::Base; MERKLE_DEPTH]>,
     }
 
     impl TestCircuitEcdsaVerifyConfig {
         pub fn new<C: CurveAffine, N: FieldExt>(meta: &mut ConstraintSystem<N>) -> Self {
             let (rns_base, rns_scalar) =
                 GeneralEccChip::<C, N, NUMBER_OF_LIMBS, BIT_LEN_LIMB>::rns();
+
+            let num_inst_cols = meta.num_instance_columns();
+            println!("1 number of instance columns: {}\n", num_inst_cols);
+
             let main_gate_config = MainGate::<N>::configure(meta);
+
+            let num_inst_cols = meta.num_instance_columns();
+            println!("2 number of instance columns: {}\n", num_inst_cols);
+
             let mut overflow_bit_lens: Vec<usize> = vec![];
             overflow_bit_lens.extend(rns_base.overflow_lengths());
             overflow_bit_lens.extend(rns_scalar.overflow_lengths());
@@ -202,14 +406,18 @@ mod tests {
             );
 
             let pk_column = meta.advice_column();
+            meta.enable_equality(pk_column);
+            let instance = meta.instance_column();
+            meta.enable_equality(instance);
 
-            // let instance = meta.instance_column();
+            let num_inst_cols = meta.num_instance_columns();
+            println!("3 number of instance columns: {}\n", num_inst_cols);
 
             TestCircuitEcdsaVerifyConfig {
                 main_gate_config,
                 range_config,
                 pk_column,
-                // instance,
+                instance,
             }
         }
 
@@ -233,6 +441,8 @@ mod tests {
         public_key: Value<E>,
         signature: Value<(E::Scalar, E::Scalar)>,
         msg_hash: Value<E::Scalar>,
+
+        v: Value<N>,
 
         aux_generator: E,
         window_size: usize,
@@ -320,6 +530,18 @@ mod tests {
                 },
             )?;
 
+            let a = layouter.assign_region(
+                || "load private",
+                |mut region| {
+                    let cell =
+                        region.assign_advice(|| "private input", config.pk_column, 0, || self.v);
+
+                    println!("load_private(): region: {:?}, cell: {:?}\n", region, cell);
+
+                    cell
+                },
+            )?;
+
             let ecdsa_chip = EcdsaChip::new(ecc_chip.clone());
             let scalar_chip = ecc_chip.scalar_field_chip();
 
@@ -364,6 +586,11 @@ mod tests {
 
             println!("pk_x: {:?}\n", pk_x);
 
+            println!("33 a: {:?}\n", a);
+
+            // layouter.constrain_instance(a.cell(), config.instance, 0)?;
+            layouter.constrain_instance(pk_x.cell(), config.instance, 0)?;
+
             // println!("instance: {:?}\n", config.instance);
 
             // let a = pk1.point.x().native().cell();
@@ -384,6 +611,7 @@ mod tests {
             big_to_fe(x_big)
         }
 
+        // use halo2::circuit::s
         use ecc::halo2::halo2curves::secp256k1::Fp;
         use ecc::halo2::halo2curves::secp256k1::Fq;
         use ecc::halo2::halo2curves::{CurveAffine, FieldExt};
@@ -508,23 +736,29 @@ mod tests {
 
             let aux_generator = Secp256k1::random(OsRng).to_affine();
 
+            let v = Fq::from(1);
+            let v2 = Fq::from(2);
+            // let v = N::from_u128(1);
+
             let circuit = TestCircuitEcdsaVerify::<Secp256k1Affine, Fq> {
                 public_key: Value::known(pk),
                 signature: Value::known((r, s)),
                 msg_hash: Value::known(msg_hash),
                 aux_generator,
                 window_size: 2,
+                v: Value::known(v),
                 ..Default::default()
             };
 
             let input = pk.coordinates().unwrap().x().clone();
             let input = Fq::from_bytes(&input.to_bytes()).unwrap();
 
-            let instance = vec![vec![input]];
+            let instance = vec![vec![v], vec![input]];
 
             println!("pk: {:?}, msg_hash: {:?}\n", pk, msg_hash);
             println!("r: {:?}, s: {:?}\n", r, s);
             println!("input: {:?}\n", input);
+            println!("v: {:?}\n", v);
 
             assert_eq!(mock_prover_verify(&circuit, instance), Ok(()));
         }
