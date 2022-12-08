@@ -8,11 +8,11 @@ use ecc::maingate::RegionCtx;
 use ecc::{AssignedPoint, EccConfig, GeneralEccChip};
 use halo2::arithmetic::{CurveAffine, FieldExt};
 use halo2::{circuit::Value, plonk::Error};
-use halo2_gadgets;
-use halo2_gadgets::sinsemilla::merkle::chip::MerkleConfig;
-use halo2_gadgets::sinsemilla::primitives::CommitDomain;
-use halo2_gadgets::sinsemilla::HashDomains;
-use halo2_proofs::pasta::pallas;
+// use halo2_gadgets;
+// use halo2_gadgets::sinsemilla::merkle::chip::MerkleConfig;
+// use halo2_gadgets::sinsemilla::primitives::CommitDomain;
+// use halo2_gadgets::sinsemilla::HashDomains;
+// use halo2_proofs::pasta::pallas;
 use integer::rns::Integer;
 use integer::{AssignedInteger, IntegerInstructions};
 use maingate::{MainGateConfig, RangeConfig};
@@ -105,6 +105,7 @@ impl<E: CurveAffine, N: FieldExt, const NUMBER_OF_LIMBS: usize, const BIT_LEN_LI
         pk: &AssignedPublicKey<E::Base, N, NUMBER_OF_LIMBS, BIT_LEN_LIMB>,
         msg_hash: &AssignedInteger<E::Scalar, N, NUMBER_OF_LIMBS, BIT_LEN_LIMB>,
     ) -> Result<(), Error> {
+        print!("111111111111");
         let ecc_chip = self.ecc_chip();
         let scalar_chip = ecc_chip.scalar_field_chip();
         let base_chip = ecc_chip.base_field_chip();
@@ -151,6 +152,7 @@ use lazy_static::lazy_static;
 use std::convert::TryInto;
 
 pub(crate) const PERSONALIZATION: &str = "MerkleCRH";
+
 // lazy_static::lazy_static! {
 // static ref COMMIT_DOMAIN: CommitDomain = CommitDomain::new(PERSONALIZATION);
 //     COMMIT_DOMAIN.
@@ -346,7 +348,6 @@ mod tests {
     // use ecc::halo2::halo2curves::secp256k1::Secp256k1Compressed;
     // use ecc::halo2::plonk::Column;
     // use ecc::halo2::plonk::Instance;
-    use super::*;
     use ecc::integer::rns::Common;
     use ecc::integer::Range;
     use ecc::maingate::big_to_fe;
