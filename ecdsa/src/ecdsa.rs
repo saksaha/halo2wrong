@@ -169,9 +169,16 @@ mod tests {
     use halo2::arithmetic::FieldExt;
     use halo2::circuit::{Layouter, SimpleFloorPlanner, Value};
     use halo2::plonk::{Circuit, ConstraintSystem, Error};
+    use halo2_gadgets::sinsemilla::chip::SinsemillaChip;
+    use halo2_gadgets::sinsemilla::merkle::chip::MerkleChip;
+    use halo2_gadgets::sinsemilla::merkle::chip::MerkleConfig;
+    use halo2_gadgets::sinsemilla::merkle::MerklePath;
     use integer::IntegerInstructions;
     use maingate::mock_prover_verify;
     use maingate::{MainGate, MainGateConfig, RangeChip, RangeConfig, RangeInstructions};
+    use orchard::constants::OrchardCommitDomains;
+    use orchard::constants::OrchardFixedBases;
+    use orchard::constants::OrchardHashDomains;
     use rand_core::OsRng;
     use std::marker::PhantomData;
 
@@ -185,9 +192,8 @@ mod tests {
         pk_column: Column<Advice>,
         instance: Column<Instance>,
         // sinsemilla
-        // leaf: Value<pallas::Base>,
-        // leaf_pos: Value<u32>,
-        // merkle_path: Value<[pallas::Base; MERKLE_DEPTH]>,
+        merkle_config_1: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
+        merkle_config_2: MerkleConfig<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases>,
     }
 
     impl TestCircuitEcdsaVerifyConfig {
@@ -223,6 +229,45 @@ mod tests {
             let num_inst_cols = meta.num_instance_columns();
             println!("3 number of instance columns: {}\n", num_inst_cols);
 
+            // sinsemilla
+            {
+                // Configuration for a Sinsemilla hash instantiation and a
+                // Merkle hash instantiation using this Sinsemilla instance.
+                // Since the Sinsemilla config uses only 5 advice columns,
+                // we can fit two instances side-by-side.
+                let (sinsemilla_config_1, merkle_config_1) = {
+                    let sinsemilla_config_1 = SinsemillaChip::configure(
+                        meta,
+                        advices[..5].try_into().unwrap(),
+                        advices[6],
+                        lagrange_coeffs[0],
+                        lookup,
+                        range_check,
+                    );
+                    let merkle_config_1 = MerkleChip::configure(meta, sinsemilla_config_1.clone());
+
+                    (sinsemilla_config_1, merkle_config_1)
+                };
+
+                // Configuration for a Sinsemilla hash instantiation and a
+                // Merkle hash instantiation using this Sinsemilla instance.
+                // Since the Sinsemilla config uses only 5 advice columns,
+                // we can fit two instances side-by-side.
+                let (sinsemilla_config_2, merkle_config_2) = {
+                    let sinsemilla_config_2 = SinsemillaChip::configure(
+                        meta,
+                        advices[5..].try_into().unwrap(),
+                        advices[7],
+                        lagrange_coeffs[1],
+                        lookup,
+                        range_check,
+                    );
+                    let merkle_config_2 = MerkleChip::configure(meta, sinsemilla_config_2.clone());
+
+                    (sinsemilla_config_2, merkle_config_2)
+                };
+            };
+
             TestCircuitEcdsaVerifyConfig {
                 main_gate_config,
                 range_config,
@@ -233,6 +278,18 @@ mod tests {
 
         pub fn ecc_chip_config(&self) -> EccConfig {
             EccConfig::new(self.range_config.clone(), self.main_gate_config.clone())
+        }
+
+        pub fn merkle_chip_1(
+            &self,
+        ) -> MerkleChip<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases> {
+            MerkleChip::construct(self.merkle_config_1.clone())
+        }
+
+        pub fn merkle_chip_2(
+            &self,
+        ) -> MerkleChip<OrchardHashDomains, OrchardCommitDomains, OrchardFixedBases> {
+            MerkleChip::construct(self.merkle_config_2.clone())
         }
 
         pub fn config_range<N: FieldExt>(
@@ -398,6 +455,21 @@ mod tests {
             // let a = pk1.point.x().native().cell();
 
             config.config_range(&mut layouter)?;
+
+            let root = {
+                // let path = self
+                //     .path
+                //     .map(|typed_path| typed_path.map(|node| node.inner()));
+                let path = vec![];
+                let merkle_inputs = MerklePath::construct(
+                    [config.merkle_chip_1(), config.merkle_chip_2()],
+                    OrchardHashDomains::MerkleCrh,
+                    self.pos,
+                    path,
+                );
+                let leaf = cm_old.extract_p().inner().clone();
+                merkle_inputs.calculate_root(layouter.namespace(|| "Merkle path"), leaf)?
+            };
 
             // layouter.constrain_instance(a, config.instance, 0)?;
             // layouter.constrain_instance(cell, column, row);
@@ -581,240 +653,240 @@ mod tests {
     }
 }
 
-#[cfg(test)]
-pub mod tests2 {
-    use halo2_gadgets::sinsemilla::merkle::{
-        chip::{MerkleChip, MerkleConfig},
-        MerklePath,
-    };
+// #[cfg(test)]
+// pub mod tests2 {
+//     use halo2_gadgets::sinsemilla::merkle::{
+//         chip::{MerkleChip, MerkleConfig},
+//         MerklePath,
+//     };
 
-    use crate::{
-        ecc::tests::TestFixedBases,
-        sinsemilla::{
-            chip::SinsemillaChip,
-            tests::{TestCommitDomain, TestHashDomain},
-            HashDomains,
-        },
-        utilities::{i2lebsp, lookup_range_check::LookupRangeCheckConfig, UtilitiesInstructions},
-    };
+//     use crate::{
+//         ecc::tests::TestFixedBases,
+//         sinsemilla::{
+//             chip::SinsemillaChip,
+//             tests::{TestCommitDomain, TestHashDomain},
+//             HashDomains,
+//         },
+//         utilities::{i2lebsp, lookup_range_check::LookupRangeCheckConfig, UtilitiesInstructions},
+//     };
 
-    use group::ff::{Field, PrimeField, PrimeFieldBits};
-    use halo2_proofs::{
-        circuit::{Layouter, SimpleFloorPlanner, Value},
-        dev::MockProver,
-        pasta::pallas,
-        plonk::{Circuit, ConstraintSystem, Error},
-    };
+//     use group::ff::{Field, PrimeField, PrimeFieldBits};
+//     use halo2_proofs::{
+//         circuit::{Layouter, SimpleFloorPlanner, Value},
+//         dev::MockProver,
+//         pasta::pallas,
+//         plonk::{Circuit, ConstraintSystem, Error},
+//     };
 
-    use rand::{rngs::OsRng, RngCore};
-    use std::{convert::TryInto, iter};
+//     use rand::{rngs::OsRng, RngCore};
+//     use std::{convert::TryInto, iter};
 
-    const MERKLE_DEPTH: usize = 32;
+//     const MERKLE_DEPTH: usize = 32;
 
-    #[derive(Default)]
-    struct MyCircuit {
-        leaf: Value<pallas::Base>,
-        leaf_pos: Value<u32>,
-        merkle_path: Value<[pallas::Base; MERKLE_DEPTH]>,
-    }
+//     #[derive(Default)]
+//     struct MyCircuit {
+//         leaf: Value<pallas::Base>,
+//         leaf_pos: Value<u32>,
+//         merkle_path: Value<[pallas::Base; MERKLE_DEPTH]>,
+//     }
 
-    impl Circuit<pallas::Base> for MyCircuit {
-        type Config = (
-            MerkleConfig<TestHashDomain, TestCommitDomain, TestFixedBases>,
-            MerkleConfig<TestHashDomain, TestCommitDomain, TestFixedBases>,
-        );
-        type FloorPlanner = SimpleFloorPlanner;
+//     impl Circuit<pallas::Base> for MyCircuit {
+//         type Config = (
+//             MerkleConfig<TestHashDomain, TestCommitDomain, TestFixedBases>,
+//             MerkleConfig<TestHashDomain, TestCommitDomain, TestFixedBases>,
+//         );
+//         type FloorPlanner = SimpleFloorPlanner;
 
-        fn without_witnesses(&self) -> Self {
-            Self::default()
-        }
+//         fn without_witnesses(&self) -> Self {
+//             Self::default()
+//         }
 
-        fn configure(meta: &mut ConstraintSystem<pallas::Base>) -> Self::Config {
-            let advices = [
-                meta.advice_column(),
-                meta.advice_column(),
-                meta.advice_column(),
-                meta.advice_column(),
-                meta.advice_column(),
-                meta.advice_column(),
-                meta.advice_column(),
-                meta.advice_column(),
-                meta.advice_column(),
-                meta.advice_column(),
-            ];
+//         fn configure(meta: &mut ConstraintSystem<pallas::Base>) -> Self::Config {
+//             let advices = [
+//                 meta.advice_column(),
+//                 meta.advice_column(),
+//                 meta.advice_column(),
+//                 meta.advice_column(),
+//                 meta.advice_column(),
+//                 meta.advice_column(),
+//                 meta.advice_column(),
+//                 meta.advice_column(),
+//                 meta.advice_column(),
+//                 meta.advice_column(),
+//             ];
 
-            //   !                              <                       >      <>
-            // 0xb2bd6a00feb3f528ef1f8556699a26a52d1a1fddbec80f87f36bcfed27eb02b0
-            // 0x32bd6a00feb3f528ef1f8556699a26a4e88cede5ac2e1d50c1116e1327eb02ae
-            // 0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001
+//             //   !                              <                       >      <>
+//             // 0xb2bd6a00feb3f528ef1f8556699a26a52d1a1fddbec80f87f36bcfed27eb02b0
+//             // 0x32bd6a00feb3f528ef1f8556699a26a4e88cede5ac2e1d50c1116e1327eb02ae
+//             // 0x40000000000000000000000000000000224698fc094cf91b992d30ed00000001
 
-            // Shared fixed column for loading constants
-            let constants = meta.fixed_column();
-            meta.enable_constant(constants);
+//             // Shared fixed column for loading constants
+//             let constants = meta.fixed_column();
+//             meta.enable_constant(constants);
 
-            // NB: In the actual Action circuit, these fixed columns will be reused
-            // by other chips. For this test, we are creating new fixed columns.
-            let fixed_y_q_1 = meta.fixed_column();
-            let fixed_y_q_2 = meta.fixed_column();
+//             // NB: In the actual Action circuit, these fixed columns will be reused
+//             // by other chips. For this test, we are creating new fixed columns.
+//             let fixed_y_q_1 = meta.fixed_column();
+//             let fixed_y_q_2 = meta.fixed_column();
 
-            // Fixed columns for the Sinsemilla generator lookup table
-            let lookup = (
-                meta.lookup_table_column(),
-                meta.lookup_table_column(),
-                meta.lookup_table_column(),
-            );
+//             // Fixed columns for the Sinsemilla generator lookup table
+//             let lookup = (
+//                 meta.lookup_table_column(),
+//                 meta.lookup_table_column(),
+//                 meta.lookup_table_column(),
+//             );
 
-            let range_check = LookupRangeCheckConfig::configure(meta, advices[9], lookup.0);
+//             let range_check = LookupRangeCheckConfig::configure(meta, advices[9], lookup.0);
 
-            let sinsemilla_config_1 = SinsemillaChip::configure(
-                meta,
-                advices[5..].try_into().unwrap(),
-                advices[7],
-                fixed_y_q_1,
-                lookup,
-                range_check,
-            );
-            let config1 = MerkleChip::configure(meta, sinsemilla_config_1);
+//             let sinsemilla_config_1 = SinsemillaChip::configure(
+//                 meta,
+//                 advices[5..].try_into().unwrap(),
+//                 advices[7],
+//                 fixed_y_q_1,
+//                 lookup,
+//                 range_check,
+//             );
+//             let config1 = MerkleChip::configure(meta, sinsemilla_config_1);
 
-            let sinsemilla_config_2 = SinsemillaChip::configure(
-                meta,
-                advices[..5].try_into().unwrap(),
-                advices[2],
-                fixed_y_q_2,
-                lookup,
-                range_check,
-            );
-            let config2 = MerkleChip::configure(meta, sinsemilla_config_2);
+//             let sinsemilla_config_2 = SinsemillaChip::configure(
+//                 meta,
+//                 advices[..5].try_into().unwrap(),
+//                 advices[2],
+//                 fixed_y_q_2,
+//                 lookup,
+//                 range_check,
+//             );
+//             let config2 = MerkleChip::configure(meta, sinsemilla_config_2);
 
-            (config1, config2)
-        }
+//             (config1, config2)
+//         }
 
-        fn synthesize(
-            &self,
-            config: Self::Config,
-            mut layouter: impl Layouter<pallas::Base>,
-        ) -> Result<(), Error> {
-            // Load generator table (shared across both configs)
-            SinsemillaChip::<TestHashDomain, TestCommitDomain, TestFixedBases>::load(
-                config.0.sinsemilla_config.clone(),
-                &mut layouter,
-            )?;
+//         fn synthesize(
+//             &self,
+//             config: Self::Config,
+//             mut layouter: impl Layouter<pallas::Base>,
+//         ) -> Result<(), Error> {
+//             // Load generator table (shared across both configs)
+//             SinsemillaChip::<TestHashDomain, TestCommitDomain, TestFixedBases>::load(
+//                 config.0.sinsemilla_config.clone(),
+//                 &mut layouter,
+//             )?;
 
-            // Construct Merkle chips which will be placed side-by-side in the circuit.
-            let chip_1 = MerkleChip::construct(config.0.clone());
-            let chip_2 = MerkleChip::construct(config.1.clone());
+//             // Construct Merkle chips which will be placed side-by-side in the circuit.
+//             let chip_1 = MerkleChip::construct(config.0.clone());
+//             let chip_2 = MerkleChip::construct(config.1.clone());
 
-            let leaf = chip_1.load_private(
-                layouter.namespace(|| ""),
-                config.0.cond_swap_config.a(),
-                self.leaf,
-            )?;
+//             let leaf = chip_1.load_private(
+//                 layouter.namespace(|| ""),
+//                 config.0.cond_swap_config.a(),
+//                 self.leaf,
+//             )?;
 
-            let path = MerklePath {
-                chips: [chip_1, chip_2],
-                domain: TestHashDomain,
-                leaf_pos: self.leaf_pos,
-                path: self.merkle_path,
-            };
+//             let path = MerklePath {
+//                 chips: [chip_1, chip_2],
+//                 domain: TestHashDomain,
+//                 leaf_pos: self.leaf_pos,
+//                 path: self.merkle_path,
+//             };
 
-            let computed_final_root =
-                path.calculate_root(layouter.namespace(|| "calculate root"), leaf)?;
+//             let computed_final_root =
+//                 path.calculate_root(layouter.namespace(|| "calculate root"), leaf)?;
 
-            self.leaf
-                .zip(self.leaf_pos)
-                .zip(self.merkle_path)
-                .zip(computed_final_root.value())
-                .assert_if_known(|(((leaf, leaf_pos), merkle_path), computed_final_root)| {
-                    // The expected final root
-                    let final_root =
-                        merkle_path
-                            .iter()
-                            .enumerate()
-                            .fold(*leaf, |node, (l, sibling)| {
-                                let l = l as u8;
-                                let (left, right) = if leaf_pos & (1 << l) == 0 {
-                                    (&node, sibling)
-                                } else {
-                                    (sibling, &node)
-                                };
+//             self.leaf
+//                 .zip(self.leaf_pos)
+//                 .zip(self.merkle_path)
+//                 .zip(computed_final_root.value())
+//                 .assert_if_known(|(((leaf, leaf_pos), merkle_path), computed_final_root)| {
+//                     // The expected final root
+//                     let final_root =
+//                         merkle_path
+//                             .iter()
+//                             .enumerate()
+//                             .fold(*leaf, |node, (l, sibling)| {
+//                                 let l = l as u8;
+//                                 let (left, right) = if leaf_pos & (1 << l) == 0 {
+//                                     (&node, sibling)
+//                                 } else {
+//                                     (sibling, &node)
+//                                 };
 
-                                use crate::sinsemilla::primitives as sinsemilla;
-                                let merkle_crh =
-                                    sinsemilla::HashDomain::from_Q(TestHashDomain.Q().into());
+//                                 use crate::sinsemilla::primitives as sinsemilla;
+//                                 let merkle_crh =
+//                                     sinsemilla::HashDomain::from_Q(TestHashDomain.Q().into());
 
-                                merkle_crh
-                                    .hash(
-                                        iter::empty()
-                                            .chain(i2lebsp::<10>(l as u64).iter().copied())
-                                            .chain(
-                                                left.to_le_bits()
-                                                    .iter()
-                                                    .by_vals()
-                                                    .take(pallas::Base::NUM_BITS as usize),
-                                            )
-                                            .chain(
-                                                right
-                                                    .to_le_bits()
-                                                    .iter()
-                                                    .by_vals()
-                                                    .take(pallas::Base::NUM_BITS as usize),
-                                            ),
-                                    )
-                                    .unwrap_or(pallas::Base::zero())
-                            });
+//                                 merkle_crh
+//                                     .hash(
+//                                         iter::empty()
+//                                             .chain(i2lebsp::<10>(l as u64).iter().copied())
+//                                             .chain(
+//                                                 left.to_le_bits()
+//                                                     .iter()
+//                                                     .by_vals()
+//                                                     .take(pallas::Base::NUM_BITS as usize),
+//                                             )
+//                                             .chain(
+//                                                 right
+//                                                     .to_le_bits()
+//                                                     .iter()
+//                                                     .by_vals()
+//                                                     .take(pallas::Base::NUM_BITS as usize),
+//                                             ),
+//                                     )
+//                                     .unwrap_or(pallas::Base::zero())
+//                             });
 
-                    // Check the computed final root against the expected final root.
-                    computed_final_root == &&final_root
-                });
+//                     // Check the computed final root against the expected final root.
+//                     computed_final_root == &&final_root
+//                 });
 
-            Ok(())
-        }
-    }
+//             Ok(())
+//         }
+//     }
 
-    #[test]
-    fn merkle_chip() {
-        let mut rng = OsRng;
+//     #[test]
+//     fn merkle_chip() {
+//         let mut rng = OsRng;
 
-        // Choose a random leaf and position
-        let leaf = pallas::Base::random(rng);
-        let pos = rng.next_u32();
+//         // Choose a random leaf and position
+//         let leaf = pallas::Base::random(rng);
+//         let pos = rng.next_u32();
 
-        // Choose a path of random inner nodes
-        let path: Vec<_> = (0..(MERKLE_DEPTH))
-            .map(|_| pallas::Base::random(rng))
-            .collect();
+//         // Choose a path of random inner nodes
+//         let path: Vec<_> = (0..(MERKLE_DEPTH))
+//             .map(|_| pallas::Base::random(rng))
+//             .collect();
 
-        println!("leaf: {:?}\n", leaf);
+//         println!("leaf: {:?}\n", leaf);
 
-        println!("leaf pos: {:?}\n", pos);
+//         println!("leaf pos: {:?}\n", pos);
 
-        println!("path: {:?}\n", path);
+//         println!("path: {:?}\n", path);
 
-        // The root is provided as a public input in the Orchard circuit.
+//         // The root is provided as a public input in the Orchard circuit.
 
-        let circuit = MyCircuit {
-            leaf: Value::known(leaf),
-            leaf_pos: Value::known(pos),
-            merkle_path: Value::known(path.try_into().unwrap()),
-        };
+//         let circuit = MyCircuit {
+//             leaf: Value::known(leaf),
+//             leaf_pos: Value::known(pos),
+//             merkle_path: Value::known(path.try_into().unwrap()),
+//         };
 
-        let prover = MockProver::run(11, &circuit, vec![]).unwrap();
-        assert_eq!(prover.verify(), Ok(()))
-    }
+//         let prover = MockProver::run(11, &circuit, vec![]).unwrap();
+//         assert_eq!(prover.verify(), Ok(()))
+//     }
 
-    #[cfg(feature = "test-dev-graph")]
-    #[test]
-    fn print_merkle_chip() {
-        use plotters::prelude::*;
+//     #[cfg(feature = "test-dev-graph")]
+//     #[test]
+//     fn print_merkle_chip() {
+//         use plotters::prelude::*;
 
-        let root = BitMapBackend::new("merkle-path-layout.png", (1024, 7680)).into_drawing_area();
-        root.fill(&WHITE).unwrap();
-        let root = root.titled("MerkleCRH Path", ("sans-serif", 60)).unwrap();
+//         let root = BitMapBackend::new("merkle-path-layout.png", (1024, 7680)).into_drawing_area();
+//         root.fill(&WHITE).unwrap();
+//         let root = root.titled("MerkleCRH Path", ("sans-serif", 60)).unwrap();
 
-        let circuit = MyCircuit::default();
-        halo2_proofs::dev::CircuitLayout::default()
-            .show_labels(false)
-            .render(11, &circuit, &root)
-            .unwrap();
-    }
-}
+//         let circuit = MyCircuit::default();
+//         halo2_proofs::dev::CircuitLayout::default()
+//             .show_labels(false)
+//             .render(11, &circuit, &root)
+//             .unwrap();
+//     }
+// }
