@@ -1,17 +1,14 @@
-// use halo2::{
-//     circuit::{Chip, Layouter},
-//     pasta::Fp,
-//     plonk::{Advice, Column, ConstraintSystem, Error, Expression, Selector},
-//     poly::Rotation,
-// };
-use halo2wrong::halo2::{
-    circuit::{Chip, Layouter},
-    // pasta::Fp,
-    plonk::{Advice, Column, ConstraintSystem, Error, Expression, Selector},
-    poly::Rotation,
+use halo2wrong::{
+    curves::secp256k1::{Secp256k1, Secp256k1Affine},
+    halo2::{
+        circuit::{Chip, Layouter},
+        // pasta::Fp,
+        plonk::{Advice, Column, ConstraintSystem, Error, Expression, Selector},
+        poly::Rotation,
+    },
 };
 
-use ecc::halo2::halo2curves::pasta::Fp;
+use ecc::halo2::{circuit::Value, halo2curves::pasta::Fp, plonk::Any};
 
 use super::super::super::CellValue;
 use super::MerkleInstructions;
@@ -55,7 +52,7 @@ impl MerkleChip {
         hash_config: PoseidonConfig<Fp>,
     ) -> <Self as Chip<Fp>>::Config {
         for column in &advice {
-            meta.enable_equality((*column).into());
+            meta.enable_equality::<Column<Any>>((*column).into());
         }
 
         let s_bool = meta.selector();
@@ -101,8 +98,10 @@ impl MerkleInstructions for MerkleChip {
         &self,
         mut layouter: impl Layouter<Fp>,
         leaf_or_digest: Self::Cell,
-        sibling: Option<Fp>,
-        position_bit: Option<Fp>,
+        // sibling: Option<Fp>,
+        // position_bit: Option<Fp>,
+        sibling: Fp,
+        position_bit: Fp,
         layer: usize,
     ) -> Result<Self::Cell, Error> {
         let config = self.config.clone();
@@ -121,11 +120,12 @@ impl MerkleInstructions for MerkleChip {
                     || format!("witness leaf or digest (layer {})", layer),
                     config.advice[0],
                     row_offset,
-                    || left_or_digest_value.ok_or(Error::SynthesisError),
+                    || Value::known(left_or_digest_value.unwrap()),
+                    // || left_or_digest_value.ok_or(Error::SynthesisError),
                 )?;
 
                 if layer > 0 {
-                    region.constrain_equal(leaf_or_digest.cell(), left_or_digest_cell)?;
+                    region.constrain_equal(leaf_or_digest.cell(), left_or_digest_cell.cell())?;
                     // Should i do permutation here?
                 }
 
@@ -133,29 +133,26 @@ impl MerkleInstructions for MerkleChip {
                     || format!("witness sibling (layer {})", layer),
                     config.advice[1],
                     row_offset,
-                    || sibling.ok_or(Error::SynthesisError),
+                    || Value::known(sibling),
+                    // || sibling.ok_or(Error::SynthesisError),
                 )?;
 
                 let _position_bit_cell = region.assign_advice(
                     || format!("witness positional_bit (layer {})", layer),
                     config.advice[2],
                     row_offset,
-                    || position_bit.ok_or(Error::SynthesisError),
+                    || Value::known(position_bit),
+                    // || position_bit.ok_or(Error::SynthesisError),
                 )?;
 
                 config.s_bool.enable(&mut region, row_offset)?;
                 config.s_swap.enable(&mut region, row_offset)?;
 
-                let (l_value, r_value): (Fp, Fp) = if position_bit == Some(Fp::zero()) {
-                    (
-                        left_or_digest_value.ok_or(Error::SynthesisError)?,
-                        sibling.ok_or(Error::SynthesisError)?,
-                    )
+                // Some(fp::zero())
+                let (l_value, r_value): (Fp, Fp) = if position_bit == Fp::zero() {
+                    (left_or_digest_value.unwrap(), sibling)
                 } else {
-                    (
-                        sibling.ok_or(Error::SynthesisError)?,
-                        left_or_digest_value.ok_or(Error::SynthesisError)?,
-                    )
+                    (sibling, left_or_digest_value.unwrap())
                 };
 
                 row_offset += 1;
@@ -164,22 +161,24 @@ impl MerkleInstructions for MerkleChip {
                     || format!("witness left (layer {})", layer),
                     config.advice[0],
                     row_offset,
-                    || Ok(l_value),
+                    // || Ok(l_value),
+                    || Value::known(l_value),
                 )?;
 
                 let r_cell = region.assign_advice(
                     || format!("witness right (layer {})", layer),
                     config.advice[1],
                     row_offset,
-                    || Ok(r_value),
+                    // || Ok(r_value),
+                    || Value::known(r_value),
                 )?;
 
                 left_digest = Some(CellValue {
-                    cell: l_cell,
+                    cell: l_cell.cell(),
                     value: Some(l_value),
                 });
                 right_digest = Some(CellValue {
-                    cell: r_cell,
+                    cell: r_cell.cell(),
                     value: Some(r_value),
                 });
 

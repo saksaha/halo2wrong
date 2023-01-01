@@ -57,8 +57,8 @@ pub trait UtilitiesInstructions<F: FieldExt> {
                     || "load private",
                     column,
                     0,
-                    || Value { inner: value },
                     // || value.ok_or(Error::Synthesis),
+                    || Value::known(value.unwrap()),
                 )?;
                 Ok(Var::new(cell.cell(), value))
             },
@@ -89,8 +89,8 @@ where
     AR: Into<String>,
 {
     let cell = region.assign_advice(annotation, column, offset, || {
-        Value { inner: copy.value }
         // copy.value.ok_or(Error::Synthesis)
+        Value::known(copy.value.unwrap())
     })?;
 
     region.constrain_equal(cell.cell(), copy.cell)?;

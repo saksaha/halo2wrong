@@ -1,5 +1,6 @@
 use std::iter;
 
+use ecc::halo2::{circuit::Value, plonk::Any};
 // use halo2::{
 //     arithmetic::FieldExt,
 //     circuit::{Cell, Chip, Layouter, Region},
@@ -78,7 +79,7 @@ impl<F: FieldExt> Pow5T3Chip<F> {
         // every permutation round, while rc_b is empty in the initial and final full
         // rounds, so we use rc_b as "scratch space" for fixed values (enabling potential
         // layouter optimisations).
-        for column in iter::empty()
+        for column in iter::empty::<Column<Any>>()
             .chain(state.iter().cloned().map(|c| c.into()))
             .chain(rc_b.iter().cloned().map(|c| c.into()))
         {
@@ -314,8 +315,9 @@ impl<F: FieldExt, S: Spec<F, WIDTH, 2>> PoseidonDuplexInstructions<F, S, WIDTH, 
                         0,
                         value,
                     )?;
-                    Ok(StateWord {
-                        var,
+
+                    Ok::<StateWord<F>, Error>(StateWord {
+                        var: var.cell(),
                         value: Some(value),
                     })
                 };
@@ -345,14 +347,21 @@ impl<F: FieldExt, S: Spec<F, WIDTH, 2>> PoseidonDuplexInstructions<F, S, WIDTH, 
                 // Load the initial state into this region.
                 let mut load_state_word = |i: usize| {
                     let value = initial_state[i].value;
+
                     let var = region.assign_advice(
                         || format!("load state_{}", i),
                         config.state[i],
                         0,
-                        || value.ok_or(Error::SynthesisError),
+                        // || value.ok_or(Error::SynthesisError),
+                        || Value::known(value.unwrap()),
                     )?;
-                    region.constrain_equal(initial_state[i].var, var)?;
-                    Ok(StateWord { var, value })
+
+                    region.constrain_equal(initial_state[i].var, var.cell())?;
+
+                    Ok::<StateWord<F>, Error>(StateWord {
+                        var: var.cell(),
+                        value,
+                    })
                 };
                 let initial_state = [
                     load_state_word(0)?,
@@ -371,21 +380,29 @@ impl<F: FieldExt, S: Spec<F, WIDTH, 2>> PoseidonDuplexInstructions<F, S, WIDTH, 
                                 || format!("load pad_{}", i),
                                 config.rc_b[i],
                                 1,
-                                || Ok(padding_value),
+                                // || Ok(padding_value),
+                                || Value::known(padding_value),
                             )?;
-                            (padding_var, Some(padding_value))
+
+                            (padding_var.cell(), Some(padding_value))
                         }
                         _ => panic!("Input and padding don't match"),
                     };
+
                     let var = region.assign_advice(
                         || format!("load input_{}", i),
                         config.state[i],
                         1,
-                        || value.ok_or(Error::SynthesisError),
+                        // || value.ok_or(Error::SynthesisError),
+                        || Value::known(value.unwrap()),
                     )?;
-                    region.constrain_equal(constraint_var, var)?;
 
-                    Ok(StateWord { var, value })
+                    region.constrain_equal(constraint_var, var.cell())?;
+
+                    Ok::<StateWord<F>, Error>(StateWord {
+                        var: var.cell(),
+                        value,
+                    })
                 };
                 let input = [load_input_word(0)?, load_input_word(1)?];
 
@@ -399,13 +416,19 @@ impl<F: FieldExt, S: Spec<F, WIDTH, 2>> PoseidonDuplexInstructions<F, S, WIDTH, 
                             .unwrap_or_else(|| Some(F::zero()))
                             .map(|input_word| initial_word + input_word)
                     });
+
                     let var = region.assign_advice(
                         || format!("load output_{}", i),
                         config.state[i],
                         2,
-                        || value.ok_or(Error::SynthesisError),
+                        // || value.ok_or(Error::SynthesisError),
+                        || Value::known(value.unwrap()),
                     )?;
-                    Ok(StateWord { var, value })
+
+                    Ok::<StateWord<F>, Error>(StateWord {
+                        var: var.cell(),
+                        value,
+                    })
                 };
 
                 Ok([
@@ -508,7 +531,8 @@ impl<F: FieldExt> Pow5T3State<F> {
                 || format!("round_{} partial_sbox", round),
                 config.partial_sbox,
                 offset,
-                || r.map(|r| r[0]).ok_or(Error::SynthesisError),
+                // || r.map(|r| r[0]).ok_or(Error::SynthesisError),
+                || Value::known(r.map(|r| r[0]).unwrap()),
             )?;
 
             let p_mid = r.map(|r| {
@@ -525,7 +549,8 @@ impl<F: FieldExt> Pow5T3State<F> {
                     || format!("round_{} rc_{}", round + 1, i),
                     config.rc_b[i],
                     offset,
-                    || Ok(config.round_constants[round + 1][i]),
+                    // || Ok(config.round_constants[round + 1][i]),
+                    || Value::known(config.round_constants[round + 1][i]),
                 )
             };
             for i in 0..WIDTH {
@@ -558,14 +583,21 @@ impl<F: FieldExt> Pow5T3State<F> {
     ) -> Result<Self, Error> {
         let mut load_state_word = |i: usize| {
             let value = initial_state[i].value;
+
             let var = region.assign_advice(
                 || format!("load state_{}", i),
                 config.state[i],
                 0,
-                || value.ok_or(Error::SynthesisError),
+                // || value.ok_or(Error::SynthesisError),
+                || Value::known(value.unwrap()),
             )?;
-            region.constrain_equal(initial_state[i].var, var)?;
-            Ok(StateWord { var, value })
+
+            region.constrain_equal(initial_state[i].var, var.cell())?;
+
+            Ok::<StateWord<F>, Error>(StateWord {
+                var: var.cell(),
+                value,
+            })
         };
 
         Ok(Pow5T3State([
@@ -592,7 +624,8 @@ impl<F: FieldExt> Pow5T3State<F> {
                 || format!("round_{} rc_{}", round, i),
                 config.rc_a[i],
                 offset,
-                || Ok(config.round_constants[round][i]),
+                // || Ok(config.round_constants[round][i]),
+                || Value::known(config.round_constants[round][i]),
             )
         };
         for i in 0..WIDTH {
@@ -608,9 +641,14 @@ impl<F: FieldExt> Pow5T3State<F> {
                 || format!("round_{} state_{}", next_round, i),
                 config.state[i],
                 offset + 1,
-                || value.ok_or(Error::SynthesisError),
+                // || value.ok_or(Error::SynthesisError),
+                || Value::known(value.unwrap()),
             )?;
-            Ok(StateWord { var, value })
+
+            Ok::<StateWord<F>, Error>(StateWord {
+                var: var.cell(),
+                value,
+            })
         };
 
         Ok(Pow5T3State([

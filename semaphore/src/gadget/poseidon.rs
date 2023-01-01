@@ -282,13 +282,13 @@ where
                         || format!("load message_{}", i),
                         poseidon_config.state[i],
                         0,
-                        || Value { inner: value },
                         // || value.ok_or(Error::SynthesisError),
+                        || Value::known(value.unwrap()),
                     )?;
 
                     region.constrain_equal(var.cell(), message[i].cell())?;
 
-                    Ok(Word::<F, Pow5T3Chip<F>, P128Pow5T3, 3, 2>::from_inner(
+                    Ok::<_, Error>(Word::<F, Pow5T3Chip<F>, P128Pow5T3, 3, 2>::from_inner(
                         StateWord::new(var.cell(), value),
                     ))
                 };

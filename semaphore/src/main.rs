@@ -3,7 +3,7 @@
 //     pasta::Fp,
 //     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance},
 // };
-use ecc::halo2::halo2curves::pasta::Fp;
+use ecc::halo2::{halo2curves::pasta::Fp, plonk::Any};
 use halo2wrong::halo2::{
     circuit::{Layouter, SimpleFloorPlanner},
     // pasta::Fp,
@@ -116,10 +116,10 @@ impl Circuit<pallas::Base> for SemaphoreCircuit {
         ];
 
         let instance = meta.instance_column();
-        meta.enable_equality(instance.into());
+        meta.enable_equality::<Column<Any>>(instance.into());
 
         for advice in advices.iter() {
-            meta.enable_equality((*advice).into());
+            meta.enable_equality::<Column<Any>>((*advice).into());
         }
 
         let rc_a = [

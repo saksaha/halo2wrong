@@ -22,8 +22,10 @@ pub trait MerkleInstructions: Chip<Fp> {
         &self,
         layouter: impl Layouter<Fp>,
         leaf_or_digest: Self::Cell,
-        sibling: Option<Fp>,
-        position_bit: Option<Fp>,
+        // sibling: Option<Fp>,
+        // position_bit: Option<Fp>,
+        sibling: Fp,
+        position_bit: Fp,
         layer: usize,
     ) -> Result<Self::Cell, Error>;
 }
@@ -60,8 +62,10 @@ where
             node = self.chip.hash_layer(
                 layouter.namespace(|| format!("hash l {}", layer)),
                 node,
-                Some(*sibling),
-                Some(*pos),
+                // Some(*sibling),
+                // Some(*pos),
+                *sibling,
+                *pos,
                 layer,
             )?;
         }
