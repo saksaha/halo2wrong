@@ -1,15 +1,10 @@
-use halo2::{
-    pasta::Fp
-};
+// use halo2::pasta::Fp;
+use ecc::halo2::halo2curves::pasta::Fp;
 
 pub mod merkle;
 pub mod poseidon;
 
-
-use crate::gadget::{
-    merkle::*,
-    poseidon::{Pow5T3Chip as PoseidonChip}
-};
+use crate::gadget::{merkle::*, poseidon::Pow5T3Chip as PoseidonChip};
 
 impl super::Config {
     pub(super) fn construct_merkle_chip(&self) -> MerkleChip {
@@ -20,3 +15,4 @@ impl super::Config {
         PoseidonChip::construct(self.poseidon_config.clone())
     }
 }
+

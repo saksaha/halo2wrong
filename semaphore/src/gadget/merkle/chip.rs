@@ -1,9 +1,17 @@
-use halo2::{
+// use halo2::{
+//     circuit::{Chip, Layouter},
+//     pasta::Fp,
+//     plonk::{Advice, Column, ConstraintSystem, Error, Expression, Selector},
+//     poly::Rotation,
+// };
+use halo2wrong::halo2::{
     circuit::{Chip, Layouter},
-    pasta::Fp,
+    // pasta::Fp,
     plonk::{Advice, Column, ConstraintSystem, Error, Expression, Selector},
     poly::Rotation,
 };
+
+use ecc::halo2::halo2curves::pasta::Fp;
 
 use super::super::super::CellValue;
 use super::MerkleInstructions;
@@ -209,4 +217,3 @@ impl MerkleInstructions for MerkleChip {
         Ok(digest)
     }
 }
-

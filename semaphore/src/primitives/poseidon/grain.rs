@@ -3,7 +3,7 @@
 use std::marker::PhantomData;
 
 use bitvec::prelude::*;
-use halo2::arithmetic::FieldExt;
+use halo2wrong::halo2::arithmetic::FieldExt;
 
 const STATE: usize = 80;
 
@@ -181,7 +181,8 @@ impl<F: FieldExt> Iterator for Grain<F> {
 
 #[cfg(test)]
 mod tests {
-    use pasta_curves::Fp;
+    // use pasta_curves::Fp;
+    use ecc::halo2::halo2curves::pasta::Fp;
 
     use super::{Grain, SboxType};
 

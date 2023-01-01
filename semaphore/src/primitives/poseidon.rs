@@ -3,7 +3,8 @@ use std::fmt;
 use std::iter;
 use std::marker::PhantomData;
 
-use halo2::arithmetic::FieldExt;
+// use halo2::arithmetic::FieldExt;
+use halo2wrong::halo2::arithmetic::FieldExt;
 
 pub(crate) mod fp;
 pub(crate) mod fq;
@@ -11,7 +12,7 @@ pub(crate) mod grain;
 pub(crate) mod mds;
 
 mod p128pow5t3;
-pub use p128pow5t3::{P128Pow5T3};
+pub use p128pow5t3::P128Pow5T3;
 
 use grain::SboxType;
 
@@ -354,3 +355,4 @@ impl<F: FieldExt, S: Spec<F, T, RATE>, const T: usize, const RATE: usize, const 
         self.duplex.squeeze()
     }
 }
+

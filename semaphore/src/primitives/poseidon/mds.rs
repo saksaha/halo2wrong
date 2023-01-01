@@ -1,4 +1,5 @@
-use halo2::arithmetic::FieldExt;
+// use halo2::arithmetic::FieldExt;
+use halo2wrong::halo2::arithmetic::FieldExt;
 
 use super::{grain::Grain, Mds};
 
@@ -98,7 +99,8 @@ pub(super) fn generate_mds<F: FieldExt, const T: usize>(
 
 #[cfg(test)]
 mod tests {
-    use pasta_curves::Fp;
+    // use pasta_curves::Fp;
+    use ecc::halo2::halo2curves::pasta::Fp;
 
     use super::{generate_mds, Grain};
 

@@ -1,16 +1,23 @@
 use std::array;
 use std::fmt;
 
-use halo2::{
+// use halo2::{
+//     arithmetic::FieldExt,
+//     circuit::{Chip, Layouter},
+//     plonk::Error,
+// };
+use halo2wrong::halo2::{
     arithmetic::FieldExt,
     circuit::{Chip, Layouter},
     plonk::Error,
 };
 
 mod pow5t3;
-pub use pow5t3::{Pow5T3Chip, Pow5T3Config, StateWord};
+use crate::primitives::poseidon::{
+    ConstantLength, Domain, P128Pow5T3, Spec, Sponge, SpongeState, State,
+};
 use crate::utils::{CellValue, Var};
-use crate::primitives::poseidon::{ConstantLength, Domain, Spec, Sponge, SpongeState, State, P128Pow5T3};
+pub use pow5t3::{Pow5T3Chip, Pow5T3Config, StateWord};
 
 /// The set of circuit instructions required to use the Poseidon permutation.
 pub trait PoseidonInstructions<F: FieldExt, S: Spec<F, T, RATE>, const T: usize, const RATE: usize>:
@@ -243,7 +250,8 @@ impl<
         const RATE: usize,
         const L: usize,
     > Hash<F, PoseidonChip, S, ConstantLength<L>, T, RATE>
-where P128Pow5T3: Spec<F, 3_usize, 2_usize>
+where
+    P128Pow5T3: Spec<F, 3_usize, 2_usize>,
 {
     /// Hashes the given input.
     pub fn hash(
@@ -258,11 +266,11 @@ where P128Pow5T3: Spec<F, 3_usize, 2_usize>
         self.duplex.squeeze(layouter.namespace(|| "squeeze"))
     }
 
-    pub fn witness_message_pieces( 
+    pub fn witness_message_pieces(
         &mut self,
         poseidon_config: Pow5T3Config<F>,
         mut layouter: impl Layouter<F>,
-        message: [CellValue<F>; L]
+        message: [CellValue<F>; L],
     ) -> Result<[Word<F, Pow5T3Chip<F>, P128Pow5T3, 3_usize, 2_usize>; 2_usize], Error> {
         let poseidon_message = layouter.assign_region(
             || "load message",
@@ -280,10 +288,11 @@ where P128Pow5T3: Spec<F, 3_usize, 2_usize>
                         StateWord::new(var, value),
                     ))
                 };
-    
+
                 Ok([message_word(0)?, message_word(1)?])
             },
         )?;
         Ok(poseidon_message)
-    } 
+    }
 }
+

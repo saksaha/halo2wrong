@@ -1,8 +1,15 @@
-use halo2::{
+// use halo2::{
+//     circuit::{Chip, Layouter},
+//     pasta::Fp,
+//     plonk::Error,
+// };
+use halo2wrong::halo2::{
     circuit::{Chip, Layouter},
-    pasta::Fp,
+    // pasta::Fp,
     plonk::Error,
 };
+
+use ecc::halo2::halo2curves::pasta::Fp;
 
 mod chip;
 use super::super::MERKLE_DEPTH;

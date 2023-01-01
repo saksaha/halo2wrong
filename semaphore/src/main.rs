@@ -1,10 +1,17 @@
-use halo2::{
+// use halo2::{
+//     circuit::{Layouter, SimpleFloorPlanner},
+//     pasta::Fp,
+//     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance},
+// };
+use ecc::halo2::halo2curves::pasta::Fp;
+use halo2wrong::halo2::{
     circuit::{Layouter, SimpleFloorPlanner},
-    pasta::Fp,
+    // pasta::Fp,
     plonk::{Advice, Circuit, Column, ConstraintSystem, Error, Instance},
 };
 
-use pasta_curves::pallas;
+// use pasta_curves::pallas;
+use ecc::halo2::halo2curves::pasta::pallas;
 
 mod gadget;
 mod primitives;
@@ -229,7 +236,8 @@ impl Circuit<pallas::Base> for SemaphoreCircuit {
 }
 
 fn main() {
-    use halo2::dev::MockProver;
+    // use halo2::dev::MockProver;
+    use halo2wrong::halo2::dev::MockProver;
 
     use crate::primitives::poseidon::Hash;
 

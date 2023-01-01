@@ -1,5 +1,7 @@
-use halo2::arithmetic::{Field, FieldExt};
-use pasta_curves::{pallas::Base as Fp, vesta::Base as Fq};
+// use halo2::arithmetic::{Field, FieldExt};
+use halo2wrong::halo2::arithmetic::{Field, FieldExt};
+// use pasta_curves::{pallas::Base as Fp, vesta::Base as Fq};
+use ecc::halo2::halo2curves::pasta::{pallas::Base as Fp, vesta::Base as Fq};
 use std::marker::PhantomData;
 
 use super::{Mds, Spec};

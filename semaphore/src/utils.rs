@@ -1,7 +1,12 @@
-use halo2::{
+// use halo2::{
+//     arithmetic::FieldExt,
+//     circuit::{Cell, Layouter, Region},
+//     plonk::{Advice, Column, Error, Instance},
+// };
+use halo2wrong::halo2::{
     arithmetic::FieldExt,
     circuit::{Cell, Layouter, Region},
-    plonk::{Column, Advice, Instance, Error},
+    plonk::{Advice, Column, Error, Instance},
 };
 
 // #[derive(Clone)]
@@ -90,3 +95,4 @@ where
 
     Ok(CellValue::new(cell, copy.value))
 }
+
