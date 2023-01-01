@@ -1,6 +1,7 @@
 use std::array;
 use std::fmt;
 
+use ecc::halo2::circuit::Value;
 // use halo2::{
 //     arithmetic::FieldExt,
 //     circuit::{Chip, Layouter},
@@ -281,11 +282,14 @@ where
                         || format!("load message_{}", i),
                         poseidon_config.state[i],
                         0,
-                        || value.ok_or(Error::SynthesisError),
+                        || Value { inner: value },
+                        // || value.ok_or(Error::SynthesisError),
                     )?;
-                    region.constrain_equal(var, message[i].cell())?;
+
+                    region.constrain_equal(var.cell(), message[i].cell())?;
+
                     Ok(Word::<F, Pow5T3Chip<F>, P128Pow5T3, 3, 2>::from_inner(
-                        StateWord::new(var, value),
+                        StateWord::new(var.cell(), value),
                     ))
                 };
 
@@ -295,4 +299,3 @@ where
         Ok(poseidon_message)
     }
 }
-

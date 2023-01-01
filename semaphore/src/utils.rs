@@ -5,7 +5,7 @@
 // };
 use halo2wrong::halo2::{
     arithmetic::FieldExt,
-    circuit::{Cell, Layouter, Region},
+    circuit::{Cell, Layouter, Region, Value},
     plonk::{Advice, Column, Error, Instance},
 };
 
@@ -57,9 +57,10 @@ pub trait UtilitiesInstructions<F: FieldExt> {
                     || "load private",
                     column,
                     0,
-                    || value.ok_or(Error::SynthesisError),
+                    || Value { inner: value },
+                    // || value.ok_or(Error::Synthesis),
                 )?;
-                Ok(Var::new(cell, value))
+                Ok(Var::new(cell.cell(), value))
             },
         )
     }
@@ -88,11 +89,11 @@ where
     AR: Into<String>,
 {
     let cell = region.assign_advice(annotation, column, offset, || {
-        copy.value.ok_or(Error::SynthesisError)
+        Value { inner: copy.value }
+        // copy.value.ok_or(Error::Synthesis)
     })?;
 
-    region.constrain_equal(cell, copy.cell)?;
+    region.constrain_equal(cell.cell(), copy.cell)?;
 
-    Ok(CellValue::new(cell, copy.value))
+    Ok(CellValue::new(cell.cell(), copy.value))
 }
-

@@ -879,4 +879,3 @@ impl<F: FieldExt> Pow5T3State<F> {
 //             .unwrap();
 //     }
 // }
-
